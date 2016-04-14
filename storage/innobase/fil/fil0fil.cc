@@ -4672,7 +4672,12 @@ fil_load_single_table_tablespaces(ibool (*pred)(const char*, const char*))
 
 		/* We want wrong directory permissions to be a fatal error for
 		XtraBackup. */
-		dbdir = os_file_opendir(dbpath, TRUE);
+		/* But skip dbdirs we were explicitly told to ignore */
+		if (pred && pred(dbinfo.name, NULL)) {
+			dbdir = os_file_opendir(dbpath, TRUE);
+		} else {
+			dbdir = NULL;
+		}
 
 		if (dbdir != NULL) {
 

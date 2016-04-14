@@ -157,6 +157,10 @@ static hash_table_t* databases_hash = NULL;
 
 static hash_table_t* inc_dir_tables_hash;
 
+char *xtrabackup_ignore_db_dirs = NULL;
+static hash_table_t* ignore_db_dirs_hash = NULL;
+
+
 struct xb_filter_entry_struct{
 	char*		name;
 	ibool		has_tables;
@@ -593,7 +597,8 @@ enum options_xtrabackup
   OPT_DEBUG_SLEEP_BEFORE_UNLOCK,
   OPT_SAFE_SLAVE_BACKUP_TIMEOUT,
   OPT_BINLOG_INFO,
-  OPT_XB_SECURE_AUTH
+  OPT_XB_SECURE_AUTH,
+  OPT_XTRA_IGNORE_DB_DIRS
 };
 
 struct my_option xb_long_options[] =
@@ -664,6 +669,11 @@ struct my_option xb_long_options[] =
   {"create-ib-logfile", OPT_XTRA_CREATE_IB_LOGFILE, "** not work for now** creates ib_logfile* also after '--prepare'. ### If you want create ib_logfile*, only re-execute this command in same options. ###",
    (G_PTR*) &xtrabackup_create_ib_logfile, (G_PTR*) &xtrabackup_create_ib_logfile,
    0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+
+  {"ignore-db-dirs", OPT_XTRA_IGNORE_DB_DIRS,
+   "Specifies a directory to add to the ignore list when collecting database names from the datadir.",
+   (G_PTR*) &xtrabackup_ignore_db_dirs,
+   (G_PTR*) &xtrabackup_ignore_db_dirs, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 
   {"datadir", 'h', "Path to the database root.", (G_PTR*) &mysql_data_home,
    (G_PTR*) &mysql_data_home, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
@@ -2142,6 +2152,25 @@ check_if_table_matches_filters(const char *name)
 	return(FALSE);
 }
 
+
+my_bool
+check_if_skip_dbdir(
+	const char* name)
+{
+	xb_filter_entry_t* database;
+
+        if (ignore_db_dirs_hash) {
+                HASH_SEARCH(name_hash, ignore_db_dirs_hash, ut_fold_string(name),
+                            xb_filter_entry_t*,
+                            database, (void) 0,
+                            !strcmp(database->name, name));
+		if (database) {
+			return(TRUE);
+		}
+	}
+	return(FALSE);
+}
+
 /************************************************************************
 Checks if a table specified as a name in the form "database/name" (InnoDB 5.6)
 or "./database/name.ibd" (InnoDB 5.5-) should be skipped from backup based on
@@ -3038,6 +3067,10 @@ xb_check_if_open_tablespace(
 {
 	char buf[FN_REFLEN];
 
+        if (table == NULL) {
+           return !check_if_skip_dbdir(db);
+        }
+
 	snprintf(buf, sizeof(buf), "%s/%s", db, table);
 
 	return !check_if_skip_table(buf);
@@ -3321,6 +3354,16 @@ xb_register_filter_entry(
 	}
 }
 
+/* Register a new dbdir to ignore */
+static
+void
+xb_register_ignore_db_dir(
+	const char* name) /*!< in: name of dbdir */
+{
+	xb_add_filter(name, &ignore_db_dirs_hash);
+}
+
+
 /***********************************************************************
 Register new table for the filter.  */
 static
@@ -3446,6 +3489,11 @@ xb_filters_init()
 	if (xtrabackup_tables_file) {
 		xb_load_list_file(xtrabackup_tables_file, xb_register_table);
 	}
+
+	if (xtrabackup_ignore_db_dirs) {
+		xb_load_list_string(xtrabackup_ignore_db_dirs, ",",
+				    xb_register_ignore_db_dir);
+        }
 }
 
 static

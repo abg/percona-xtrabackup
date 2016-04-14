@@ -207,6 +207,12 @@ check_if_skip_table(
 /******************/
 	const char*	name);	/*!< in: path to the table */
 
+/************************************************************************
+ Checks if a directory name is in the --ignore-db-dirs list
+
+ @return TRUE if the directory should be skipped. */
+my_bool check_if_skip_dbdir(const char* name);
+
 void
 xtrabackup_backup_func(void);
 

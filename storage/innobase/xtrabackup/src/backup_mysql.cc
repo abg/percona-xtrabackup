@@ -1205,6 +1205,9 @@ write_current_binlog_file(MYSQL *connection)
 			goto cleanup;
 		}
 
+		/* MariaDB requires FLUSH ENGINE LOGS or we may get an incomplete binlog */
+		xb_mysql_query(connection, "/*M!50500 FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS*/", false);
+
 		ut_snprintf(filepath, sizeof(filepath), "%s/%s",
 				log_bin_dir, log_bin_file);
 		result = copy_file(filepath, log_bin_file, 0);
